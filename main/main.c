@@ -19,6 +19,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "otav_agent.h"
 #include "touch.h"
 
 #define I2C_PORT I2C_NUM_0
@@ -43,6 +44,12 @@ static esp_err_t i2c_init(i2c_master_bus_handle_t *out_bus)
 void app_main(void)
 {
     ESP_LOGI(TAG, "Bloub starting");
+
+    // Start the OTAV agent first, so the web app can watch bring-up and so a
+    // board whose display or touch fails can still be updated over USB.
+    if (otav_agent_start(NULL) != ESP_OK) {
+        ESP_LOGW(TAG, "continuing without the OTAV agent");
+    }
 
     i2c_master_bus_handle_t i2c_bus;
     ESP_ERROR_CHECK(i2c_init(&i2c_bus));
