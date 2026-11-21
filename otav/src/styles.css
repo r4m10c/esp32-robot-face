@@ -90,6 +90,7 @@ input[type='range'] { width: 260px; padding: 0; }
 .error { color: var(--bad); margin: 6px 0; }
 .banner { padding: 6px 10px; border: 1px solid var(--bad); border-radius: 6px; }
 .note { margin-top: 8px; font-size: 12px; }
+.warn-text { color: var(--warn); }
 
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }

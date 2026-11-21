@@ -488,7 +488,7 @@ void otav_report_crash(void)
 
 static void send_telemetry(void)
 {
-    char buf[640];
+    char buf[1024];
     otav_json_t j;
     oj_init(&j, buf, sizeof(buf));
     oj_raw(&j,
@@ -510,7 +510,9 @@ static void send_telemetry(void)
         oj_raw(&j, ":%.3f,", (double)copy[i].value);
     }
     oj_trim_comma(&j);
-    oj_raw(&j, "}}");
+    oj_raw(&j, "},");
+    otav_link_stats_json(&j);
+    oj_raw(&j, "}");
     if (!j.overflow) otav_send(OTAV_T_TELEMETRY, buf, j.len);
 }
 
@@ -763,7 +765,7 @@ esp_err_t otav_report_start(int priority)
 {
     regs_default();
     pc_enable();
-    if (xTaskCreate(sampler_task, "otav_smp", 4096, NULL, priority, NULL) != pdPASS) {
+    if (xTaskCreate(sampler_task, "otav_smp", 5120, NULL, priority, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
 #if !CONFIG_FREERTOS_UNICORE

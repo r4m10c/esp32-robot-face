@@ -33,6 +33,7 @@ export const C = {
   OTA_ABORT: 0x88,
   REBOOT: 0x89,
   APP_STATE: 0x8a,
+  PING: 0x8b,
 } as const;
 
 export const TYPE_NAMES: Record<number, string> = Object.fromEntries([

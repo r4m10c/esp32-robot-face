@@ -62,6 +62,7 @@ export class SimTransport implements Transport {
   readonly label = 'Simulator';
   private decoder = new FrameDecoder();
   private seq = 0;
+  private link = { full: 0, stall: 0, big: 0, idle: 0, bytes: 0, tx: new Array<number>(16).fill(0), lost: new Array<number>(16).fill(0) };
   private timers: number[] = [];
   private bootUs = performance.now() * 1000;
   private rates: Record<string, number> = { telemetry: 10, regs: 10, cpu: 2, tasks: 1, otadata: 1, pc: 500 };
@@ -106,6 +107,8 @@ export class SimTransport implements Transport {
   private send(type: number, payload: Uint8Array | object) {
     const p = payload instanceof Uint8Array ? payload : new TextEncoder().encode(JSON.stringify(payload));
     const f = encodeFrame(type, this.seq++ & 0xffff, p);
+    this.link.tx[type & 0x0f]++;
+    this.link.bytes += f.length;
     // Deliver asynchronously, like a real port.
     queueMicrotask(() => this.ev.onBytes(f));
   }
@@ -252,6 +255,9 @@ export class SimTransport implements Transport {
   private onCommand(type: number, seq: number, p: Uint8Array) {
     const j = () => jsonOf<any>(p) ?? {};
     switch (type) {
+      case C.PING:
+        this.ack(seq, true);
+        break;
       case C.HELLO:
         this.send(T.HELLO, this.hello());
         this.send(T.PARTITIONS, this.partsJson());
@@ -538,6 +544,7 @@ export class SimTransport implements Transport {
       drops: 0,
       ota_w: this.ota?.w ?? 0,
       m: { fps: this.fps, bands: 22, stamps: 0 },
+      link: { ...this.link, ring_free: 24000, tx: [...this.link.tx], lost: [...this.link.lost] },
     });
   }
 

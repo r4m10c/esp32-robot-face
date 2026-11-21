@@ -144,6 +144,8 @@ export class Session {
   ota: OtaState | null = null;
   otaEvents: OtaEvent[] = [];
   telemetry: any | null = null;
+  /** Per-second link rates from the agent's own counters (device clock). */
+  linkRates: LinkRates | null = null;
   series: Record<string, Series> = {};
   regs = new Map<number, RegState>();
   cpu: any[] = [];
@@ -259,10 +261,12 @@ export class Session {
       case T.TELEMETRY: {
         const tm = jsonOf<any>(f.payload);
         if (!tm) break;
-        this.telemetry = tm;
         this.push('heap', hostT, tm.heap);
         this.push('psram', hostT, tm.psram);
         this.push('drops', hostT, tm.drops);
+        const prev = this.telemetry;
+        this.telemetry = tm;
+        if (prev?.link && tm.link && tm.t > prev.t) this.linkRates = linkRates(prev, tm);
         for (const [k, v] of Object.entries(tm.m ?? {})) this.push(`m.${k}`, hostT, v as number);
         break;
       }
@@ -426,6 +430,7 @@ class SessionFields {
   ota = null;
   otaEvents = [];
   telemetry = null;
+  linkRates = null;
   series = {};
   cpu = [];
   cpuPrev = [];
@@ -436,4 +441,43 @@ class SessionFields {
   mem = null;
   frames = 0;
   lastFrameAt = 0;
+}
+
+export interface LinkRates {
+  /** Frames per second written, by message type name. */
+  sent: Record<string, number>;
+  /** Frames per second lost, by message type name. */
+  lost: Record<string, number>;
+  /** Losses per second by reason. */
+  full: number;
+  stall: number;
+  big: number;
+  bytesPerSec: number;
+}
+
+const STREAM_NAMES: Record<number, string> = {
+  1: 'hello', 2: 'log', 3: 'partitions', 4: 'otadata', 5: 'telemetry', 6: 'tasks', 7: 'regs',
+  8: 'pc', 9: 'ota_event', 10: 'ota_progress', 11: 'ack', 12: 'mem', 13: 'cpu', 14: 'crash',
+};
+
+/** Rates between two TELEMETRY frames, timed by the device's clock. */
+export function linkRates(a: any, b: any): LinkRates {
+  const dt = (b.t - a.t) / 1e6;
+  const per = (x: number, y: number) => Math.max(0, y - x) / dt;
+  const byType = (xa: number[], xb: number[]) => {
+    const out: Record<string, number> = {};
+    for (let i = 0; i < 16; i++) {
+      const r = per(xa?.[i] ?? 0, xb?.[i] ?? 0);
+      if (r > 0) out[STREAM_NAMES[i] ?? `t${i}`] = r;
+    }
+    return out;
+  };
+  return {
+    sent: byType(a.link.tx, b.link.tx),
+    lost: byType(a.link.lost, b.link.lost),
+    full: per(a.link.full, b.link.full),
+    stall: per(a.link.stall, b.link.stall),
+    big: per(a.link.big, b.link.big),
+    bytesPerSec: per(a.link.bytes, b.link.bytes),
+  };
 }

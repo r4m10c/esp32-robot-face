@@ -18,6 +18,9 @@ static void send_snapshot(void)
 static void on_command(uint8_t type, uint16_t seq, const uint8_t *p, size_t len)
 {
     switch (type) {
+    case OTAV_C_PING:
+        otav_ack(seq, true, NULL, NULL);
+        break;
     case OTAV_C_HELLO:
         send_snapshot();
         otav_ack(seq, true, NULL, NULL);

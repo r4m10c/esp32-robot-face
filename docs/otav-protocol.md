@@ -34,7 +34,7 @@ checks the JavaScript encoder byte-for-byte against the firmware encoder
 | 0x02 | LOG | UTF-8 log line (ANSI colours included) |
 | 0x03 | PARTITIONS | JSON: flash size, running/boot/next/last_invalid labels, `parts:[{l,t,st,o,s,enc,app?,state?}]` |
 | 0x04 | OTADATA | JSON: both `esp_ota_select_entry_t` entries (seq, state, crc, crc_ok, raw hex), active entry, boot slot |
-| 0x05 | TELEMETRY | JSON: heap (internal free, min, largest block, total), PSRAM, dropped frames, OTA bytes, app metrics `m:{}` |
+| 0x05 | TELEMETRY | JSON: heap (internal free, min, largest block, total), PSRAM, lost frames (`drops`), OTA bytes, app metrics `m:{}`, and `link:{full, stall, big, idle, bytes, ring_free, tx[16], lost[16]}`: cumulative counters, with `tx` and `lost` indexed by frame type & 0x0F |
 | 0x06 | TASKS | JSON: FreeRTOS tasks with state, priority, core, stack high-water mark, run-time counter |
 | 0x07 | REGS | JSON: `r:[[addr,value],…]` for the watch list |
 | 0x08 | PCSAMPLES | binary: `core u8, n u8, period_us u16, n × pc u32` |
@@ -59,6 +59,7 @@ checks the JavaScript encoder byte-for-byte against the firmware encoder
 | 0x88 | OTA_ABORT | none |
 | 0x89 | REBOOT | none |
 | 0x8A | APP_STATE | JSON: `{action: "valid" \| "rollback"}` |
+| 0x8B | PING | empty; acked. The web app sends one a second as a keepalive |
 
 ## Non-halting by design
 
@@ -66,3 +67,15 @@ Everything is read by the firmware itself. On the ESP32-S3, reading memory
 over JTAG needs a CPU halt, and a halt mid-OTA stalls Wi-Fi and flash
 operations. PC sampling uses the ASSIST_DEBUG block's PC recording: a task on
 each core reads the other core's current PC.
+
+## Host attachment
+
+USB being connected only means a powered host is on the cable, not that
+anything has the port open. The agent therefore streams only while a host is
+attached: any valid command frame attaches it, and a write that stalls for
+about 200 ms (nobody reading) detaches it. While detached, frames are
+discarded and counted as `idle`, which is not a loss. A host that wants a
+steady stream sends PING about once a second so a brief stall recovers
+quickly. `drops` counts real losses only: `full` (the 24 KB ring had no room),
+`stall` and `big` (payload over 4096 bytes).
+

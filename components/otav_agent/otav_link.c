@@ -8,7 +8,14 @@
 // Producers encode straight into a no-split ring buffer, so sending never
 // blocks and never allocates; when the host is not reading, frames are dropped
 // and counted rather than stalling the caller.
+//
+// "USB connected" only means a cable and a powered host, not that anything has
+// the port open. The link therefore tracks whether a host is attached: any
+// valid command attaches it, and a write that stalls (nobody reading) detaches
+// it. While detached, frames are discarded without counting as losses and the
+// periodic streams pause, so the ring does not fill up with stale data.
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -25,7 +32,18 @@
 
 static RingbufHandle_t s_tx;
 static otav_cmd_handler_t s_handler;
-static volatile uint32_t s_drops;
+// Counters are written from several tasks without a lock; they are
+// statistics, so an occasional lost increment does not matter.
+static struct {
+    uint32_t full;   // ring buffer had no room
+    uint32_t stall;  // host stopped reading mid-frame
+    uint32_t big;    // payload over OTAV_MAX_PAYLOAD
+    uint32_t idle;   // discarded because no host was attached (not a loss)
+    uint32_t sent[16];     // frames written, by type & 0x0F
+    uint32_t dropped[16];  // frames lost (full/stall/big), by type & 0x0F
+    uint32_t bytes;        // encoded bytes written to USB
+} s_st;
+static volatile bool s_host;
 static volatile uint16_t s_seq;
 static vprintf_like_t s_prev_vprintf;
 static bool s_started;
@@ -94,8 +112,14 @@ static int cobs_decode(uint8_t *buf, size_t len)
 
 bool otav_send(uint8_t type, const void *payload, size_t len)
 {
-    if (!s_started || len > OTAV_MAX_PAYLOAD) {
-        s_drops++;
+    if (!s_started) return false;
+    if (!s_host || !usb_serial_jtag_is_connected()) {
+        s_st.idle++;
+        return false;
+    }
+    if (len > OTAV_MAX_PAYLOAD) {
+        s_st.big++;
+        s_st.dropped[type & 0x0F]++;
         return false;
     }
     const size_t raw = 1 + 2 + len + 4;
@@ -103,7 +127,8 @@ bool otav_send(uint8_t type, const void *payload, size_t len)
 
     void *slot = NULL;
     if (xRingbufferSendAcquire(s_tx, &slot, enc_max, 0) != pdTRUE || slot == NULL) {
-        s_drops++;
+        s_st.full++;
+        s_st.dropped[type & 0x0F]++;
         return false;
     }
 
@@ -158,12 +183,32 @@ void otav_ack(uint16_t seq, bool ok, const char *err, const char *extra_json)
 
 uint32_t otav_link_drops(void)
 {
-    return s_drops;
+    return s_st.full + s_st.stall + s_st.big;
 }
 
 bool otav_link_connected(void)
 {
-    return usb_serial_jtag_is_connected();
+    return s_host && usb_serial_jtag_is_connected();
+}
+
+static void u32_list(otav_json_t *j, const uint32_t *v, int n)
+{
+    oj_raw(j, "[");
+    for (int i = 0; i < n; i++) oj_raw(j, i ? ",%" PRIu32 : "%" PRIu32, v[i]);
+    oj_raw(j, "]");
+}
+
+void otav_link_stats_json(otav_json_t *j)
+{
+    oj_raw(j,
+           "\"link\":{\"full\":%" PRIu32 ",\"stall\":%" PRIu32 ",\"big\":%" PRIu32
+           ",\"idle\":%" PRIu32 ",\"bytes\":%" PRIu32 ",\"ring_free\":%u,\"tx\":",
+           s_st.full, s_st.stall, s_st.big, s_st.idle, s_st.bytes,
+           (unsigned)(s_tx ? xRingbufferGetCurFreeSize(s_tx) : 0));
+    u32_list(j, s_st.sent, 16);
+    oj_raw(j, ",\"lost\":");
+    u32_list(j, s_st.dropped, 16);
+    oj_raw(j, "}");
 }
 
 // --- tasks -----------------------------------------------------------------
@@ -174,7 +219,8 @@ static void tx_task(void *arg)
         size_t size = 0;
         uint8_t *item = xRingbufferReceive(s_tx, &size, portMAX_DELAY);
         if (!item) continue;
-        if (usb_serial_jtag_is_connected()) {
+        const uint8_t type = size > 2 ? item[2] : 0; // first byte after delimiter + code
+        if (s_host && usb_serial_jtag_is_connected()) {
             // Strip the zero padding at the tail of the slot (keep one delimiter).
             while (size > 1 && item[size - 1] == 0 && item[size - 2] == 0) size--;
             // write_bytes can accept only part of a frame when its buffer is
@@ -191,15 +237,21 @@ static void tx_task(void *arg)
                     stalls++;
                 }
             }
+            s_st.bytes += off;
             if (off < size) {
                 // Host stopped reading mid-frame: close it with a delimiter
-                // so the next frame still parses.
+                // so the next frame still parses, and treat the host as gone
+                // until it sends another command.
                 const uint8_t z = 0;
                 usb_serial_jtag_write_bytes(&z, 1, pdMS_TO_TICKS(20));
-                s_drops++;
+                s_st.stall++;
+                s_st.dropped[type & 0x0F]++;
+                s_host = false;
+            } else {
+                s_st.sent[type & 0x0F]++;
             }
         } else {
-            s_drops++;
+            s_st.idle++;
         }
         vRingbufferReturnItem(s_tx, item);
     }
@@ -232,6 +284,7 @@ static void rx_task(void *arg)
                     uint32_t got = frame[raw - 4] | (frame[raw - 3] << 8) |
                                    (frame[raw - 2] << 16) | ((uint32_t)frame[raw - 1] << 24);
                     if (want == got && s_handler) {
+                        s_host = true;
                         uint16_t seq = frame[1] | (frame[2] << 8);
                         s_handler(frame[0], seq, frame + 3, raw - 7);
                     }

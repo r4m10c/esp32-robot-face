@@ -35,6 +35,7 @@ export class Device {
   private seq = 1;
   private pending = new Map<number, Pending>();
   private wantReconnect = false;
+  private keepalive: ReturnType<typeof setInterval> | null = null;
   otaSend: { sent: number; total: number; running: boolean; error?: string } | null = null;
 
   constructor(
@@ -84,10 +85,27 @@ export class Device {
     }
     this.setState('connected');
     await this.hello().catch(() => undefined);
+    this.startKeepalive();
+  }
+
+  // The agent stops streaming when a write stalls (it assumes nobody is
+  // reading) and resumes on the next command, so a short browser hiccup
+  // costs at most one keepalive period.
+  private startKeepalive() {
+    this.stopKeepalive();
+    this.keepalive = globalThis.setInterval(() => {
+      if (this.transport && this.state === 'connected') this.command(C.PING, undefined, 2000).catch(() => undefined);
+    }, 1000);
+  }
+
+  private stopKeepalive() {
+    if (this.keepalive !== null) globalThis.clearInterval(this.keepalive);
+    this.keepalive = null;
   }
 
   async disconnect() {
     this.wantReconnect = false;
+    this.stopKeepalive();
     const t = this.transport;
     this.transport = null;
     await t?.close();
@@ -117,6 +135,7 @@ export class Device {
   }
 
   private onClose(reason: string) {
+    this.stopKeepalive();
     this.transport = null;
     this.failPending('link lost');
     this.session.log('N', `[otav] link lost (${reason})`);

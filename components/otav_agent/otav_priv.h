@@ -48,6 +48,7 @@ enum {
     OTAV_C_OTA_ABORT = 0x88,
     OTAV_C_REBOOT = 0x89,
     OTAV_C_APP_STATE = 0x8A,  // JSON {"action":"valid"|"rollback"}
+    OTAV_C_PING = 0x8B,       // keepalive; acked, nothing else
 };
 
 // --- link (otav_link.c) ----------------------------------------------------
@@ -60,8 +61,12 @@ bool otav_send(uint8_t type, const void *payload, size_t len);
 /** printf-style JSON (or text) frame, formatted into a bounded buffer. */
 bool otav_sendf(uint8_t type, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void otav_ack(uint16_t seq, bool ok, const char *err, const char *extra_json);
+/** Frames lost for a real reason: ring full, write stalled, or oversize. */
 uint32_t otav_link_drops(void);
+/** True while a host is attached: USB is up and the host has talked to us and
+ *  is reading. Streams are only produced while this holds. */
 bool otav_link_connected(void);
+
 
 // --- json helper (otav_json.c) ---------------------------------------------
 
@@ -78,6 +83,9 @@ void oj_raw(otav_json_t *j, const char *fmt, ...) __attribute__((format(printf, 
 void oj_str(otav_json_t *j, const char *s);
 /** Removes a trailing comma, if any (for building lists in loops). */
 void oj_trim_comma(otav_json_t *j);
+
+/** Appends the link counters as a JSON member: "link":{...} (link.c). */
+void otav_link_stats_json(otav_json_t *j);
 
 // --- reports (otav_report.c) -----------------------------------------------
 

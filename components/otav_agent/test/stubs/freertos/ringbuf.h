@@ -16,3 +16,4 @@ static inline BaseType_t xRingbufferSendAcquire(RingbufHandle_t r, void **p, siz
 static inline BaseType_t xRingbufferSendComplete(RingbufHandle_t r, void *p) { return pdTRUE; }
 static inline void *xRingbufferReceive(RingbufHandle_t r, size_t *n, TickType_t w) { return 0; }
 static inline void vRingbufferReturnItem(RingbufHandle_t r, void *p) {}
+static inline size_t xRingbufferGetCurFreeSize(RingbufHandle_t r) { return 0; }

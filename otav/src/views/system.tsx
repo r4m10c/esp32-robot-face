@@ -70,8 +70,9 @@ export function Health(props: { s: Session }) {
       {row('PSRAM free', 'psram', `${bytes(tm.psram)} of ${bytes(tm.psram_tot)}`)}
       {metrics.map((m) => row(m, `m.${m}`, (tm.m[m] as number).toFixed(m === 'fps' ? 1 : 0), 0))}
       <div class="dim note">
-        largest free block {bytes(tm.heap_big)} · frames dropped by the agent {tm.drops}
+        largest free block {bytes(tm.heap_big)} · frames lost by the agent {tm.drops}
       </div>
+      <LinkLine s={s} />
     </Card>
   );
 }
@@ -226,5 +227,31 @@ export function Crash(props: { s: Session }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+const fmtRates = (r: Record<string, number>) =>
+  Object.entries(r)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} ${v < 10 ? v.toFixed(1) : Math.round(v)}`)
+    .join(' · ');
+
+/** What the agent actually put on the wire, from its own counters. */
+function LinkLine(props: { s: Session }) {
+  const r = props.s.linkRates;
+  if (!r) return null;
+  const lostTotal = r.full + r.stall + r.big;
+  return (
+    <div class="dim note mono">
+      <div>
+        link {bytes(r.bytesPerSec)}/s · sent per s: {fmtRates(r.sent) || 'none'}
+      </div>
+      {lostTotal > 0 && (
+        <div class="warn-text">
+          lost per s: {fmtRates(r.lost)} (ring full {r.full.toFixed(1)}, stalled {r.stall.toFixed(1)}
+          {r.big > 0 ? `, oversize ${r.big.toFixed(1)}` : ''})
+        </div>
+      )}
+    </div>
   );
 }

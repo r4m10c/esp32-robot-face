@@ -24,6 +24,7 @@ static void dump(void)
 int main(void)
 {
     s_started = true;
+    s_host = true; // as if a host command had arrived
     otav_send(OTAV_T_LOG, "hello", 5);
     dump();
 
