@@ -177,7 +177,27 @@ static void tx_task(void *arg)
         if (usb_serial_jtag_is_connected()) {
             // Strip the zero padding at the tail of the slot (keep one delimiter).
             while (size > 1 && item[size - 1] == 0 && item[size - 2] == 0) size--;
-            usb_serial_jtag_write_bytes(item, size, pdMS_TO_TICKS(50));
+            // write_bytes can accept only part of a frame when its buffer is
+            // full; keep going so a frame is never cut in half (a cut frame
+            // fails its CRC on the host and takes the next one with it).
+            size_t off = 0;
+            int stalls = 0;
+            while (off < size && stalls < 10) {
+                int n = usb_serial_jtag_write_bytes(item + off, size - off, pdMS_TO_TICKS(20));
+                if (n > 0) {
+                    off += (size_t)n;
+                    stalls = 0;
+                } else {
+                    stalls++;
+                }
+            }
+            if (off < size) {
+                // Host stopped reading mid-frame: close it with a delimiter
+                // so the next frame still parses.
+                const uint8_t z = 0;
+                usb_serial_jtag_write_bytes(&z, 1, pdMS_TO_TICKS(20));
+                s_drops++;
+            }
         } else {
             s_drops++;
         }
@@ -251,7 +271,7 @@ esp_err_t otav_link_start(otav_cmd_handler_t handler, int priority)
 {
     s_handler = handler;
     usb_serial_jtag_driver_config_t cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    cfg.tx_buffer_size = 4096;
+    cfg.tx_buffer_size = 8192;
     cfg.rx_buffer_size = 8192;
     esp_err_t err = usb_serial_jtag_driver_install(&cfg);
     if (err != ESP_OK) return err;

@@ -1,0 +1,6 @@
+dependencies:
+  # ESP-IDF 6 moved cJSON out of the core "json" component into the registry.
+  espressif/cjson:
+    version: "^1.7.19"
+    rules:
+      - if: "idf_version >=6.0"

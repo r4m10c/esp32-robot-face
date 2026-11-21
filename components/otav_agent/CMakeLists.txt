@@ -1,3 +1,10 @@
+# cJSON: core "json" component on IDF 5.x, registry component on IDF 6+.
+if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
+    set(OTAV_JSON espressif__cjson)
+else()
+    set(OTAV_JSON json)
+endif()
+
 idf_component_register(
     SRCS
         "otav_agent.c"
@@ -15,6 +22,6 @@ idf_component_register(
         esp_ringbuf
         esp_timer
         espcoredump
-        json
+        ${OTAV_JSON}
         spi_flash
 )

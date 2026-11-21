@@ -64,7 +64,7 @@ export class SimTransport implements Transport {
   private seq = 0;
   private timers: number[] = [];
   private bootUs = performance.now() * 1000;
-  private rates: Record<string, number> = { telemetry: 10, regs: 10, cpu: 2, tasks: 1, otadata: 1, pc: 1000 };
+  private rates: Record<string, number> = { telemetry: 10, regs: 10, cpu: 2, tasks: 1, otadata: 1, pc: 500 };
   private running = 'ota_0';
   private apps: Record<string, AppImage | null> = {
     ota_0: { proj: 'robot_face', ver: 'v1.0.0', idf: 'v5.5.1', date: 'Nov 21 2026', time: '20:14:02', sha: 'a1b2c3d4e5f60718' },

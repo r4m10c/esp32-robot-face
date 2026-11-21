@@ -45,7 +45,7 @@ typedef struct {
 } rates_t;
 
 static rates_t s_rates = {
-    .telemetry = 10, .regs = 10, .cpu = 2, .tasks = 1, .otadata = 1, .pc = 1000,
+    .telemetry = 10, .regs = 10, .cpu = 2, .tasks = 1, .otadata = 1, .pc = 500,
 };
 
 // --- metrics ---------------------------------------------------------------
