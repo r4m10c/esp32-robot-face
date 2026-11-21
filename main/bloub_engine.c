@@ -13,6 +13,7 @@
 #include "display.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "otav_agent.h"
 
 static const char *TAG = "bloub";
 
@@ -634,6 +635,9 @@ void bloub_engine_render_frame(void)
     static double s_stats_at = 0.0;
     s_frames++;
     if (now_s - s_stats_at >= 2.0) {
+        otav_agent_metric("fps", (float)((double)s_frames / (now_s - s_stats_at)));
+        otav_agent_metric("bands", (float)(paint_last - paint_first + 1));
+        otav_agent_metric("stamps", (float)f->stamp_count);
         ESP_LOGI(TAG, "%.1f fps | %s | bands %d..%d | stamps %d",
                  (double)s_frames / (now_s - s_stats_at), bloub_state_name(s_state), paint_first,
                  paint_last, f->stamp_count);

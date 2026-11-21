@@ -28,6 +28,24 @@ Find the port with `ls /dev/cu.*` while the board is plugged in. If the port
 appears and disappears in a loop, hold **BOOT** while plugging the cable in to
 force ROM download mode.
 
+The first flash after pulling the OTAV changes must be a full `idf.py flash`:
+the partition table changed to the OTA layout in `partitions.csv`. After
+that, updates can go over USB from OTAV.
+
+## OTAV: watching OTA from the inside
+
+`components/otav_agent` streams the firmware's state over the USB-C port, and
+`otav/` is a local web app that draws it live: flash map and sector grid,
+otadata, OTA stages, peripheral and CPU registers, sampled PCs, tasks, heap,
+logs, with record and replay. See [otav/README.md](otav/README.md) and
+[docs/otav-protocol.md](docs/otav-protocol.md).
+
+Because the agent owns the USB Serial/JTAG port, `idf.py monitor` no longer
+shows readable logs; they appear in OTAV's Logs card instead. The firmware
+never halts the CPU to read anything, so the agent is safe to run during an
+update. Flash encryption and secure boot are deliberately left off: both burn
+eFuses permanently.
+
 ## What was ported, and what wasn't
 
 Carried over faithfully, because they are measurements rather than settings:

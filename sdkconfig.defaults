@@ -1,9 +1,33 @@
 CONFIG_IDF_TARGET="esp32s3"
 
-# 16 MB QIO flash, single large app partition (no OTA needed here).
+# 16 MB QIO flash with the OTA layout in partitions.csv.
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# OTA with rollback: a freshly updated image boots as PENDING_VERIFY and is
+# rolled back on the next reset unless it is marked valid (the OTAV agent does
+# that after a healthy run, see CONFIG_OTAV_MARK_VALID_AFTER_MS).
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Flash encryption and secure boot stay OFF on purpose: both burn eFuses
+# permanently. Do not enable them on the development board.
+
+# The OTAV agent owns the USB Serial/JTAG port and carries the logs inside its
+# framed protocol, so the IDF console must not also write raw text there.
+# Primary console stays on UART0 (GPIO43/44), which this board does not route
+# to the USB-C port.
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Crashes are saved to the coredump partition and reported by the agent on the
+# next boot (exception cause, PC, registers, backtrace).
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# Task list with per-task CPU time for the OTAV tasks view.
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
 
 # Octal PSRAM. The face renderer lives entirely in internal SRAM, but keeping
 # PSRAM enabled leaves headroom for future assets (e.g. a bitmap face set).

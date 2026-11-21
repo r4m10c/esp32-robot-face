@@ -1,0 +1,12 @@
+menu "OTAV agent"
+
+    config OTAV_MARK_VALID_AFTER_MS
+        int "Mark a freshly updated image valid after (ms)"
+        default 15000
+        range 0 600000
+        help
+            With rollback enabled, a new image boots as PENDING_VERIFY. The agent
+            marks it valid after it has run this long. Set 0 to leave it pending
+            until OTAV (or the app) marks it valid or rolls it back.
+
+endmenu

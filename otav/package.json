@@ -1,0 +1,24 @@
+{
+  "name": "otav",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OTA viewer: live flash, otadata, register and CPU view of an ESP32-S3 running the OTAV agent",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/w3c-web-serial": "^1.0.9",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  }
+}
